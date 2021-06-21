@@ -87,6 +87,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 ENV PATH="/home/${USERNAME}/.cargo/bin:$PATH"
 
+RUN rustup install nightly
+
+RUN rustup default nightly
+
 # get edk2
 RUN git clone --recursive https://github.com/tianocore/edk2.git edk2 \
  && (cd edk2 && git checkout 38c8be123aced4cc8ad5c7e0da9121a181b94251) \
