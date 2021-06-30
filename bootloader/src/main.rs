@@ -2,12 +2,17 @@
 #![no_std]
 #![no_main]
 
-use uefi::prelude::*;
-use uefi::proto::loaded_image::LoadedImage;
-use uefi::proto::media::file::{File, RegularFile, Directory, FileMode, FileType, FileAttribute};
-use uefi::proto::media::fs::SimpleFileSystem;
 use core::panic::PanicInfo;
 use core::fmt::Write;
+
+use uefi::{
+    prelude::*,
+    proto::loaded_image::LoadedImage,
+    proto::media::file::{File, RegularFile, Directory, FileInfo, FileMode, FileType, FileAttribute},
+    proto::media::fs::SimpleFileSystem,
+    table::boot::{AllocateType, MemoryType},
+};
+
 
 #[entry]
 fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
@@ -21,7 +26,8 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     
     // ルートディレクトリを開く
     let mut root_dir = unsafe{ open_root_dir(&boot_services, handle).unwrap_success() };
-        
+    
+    // メモリマップの保存
     {
         struct RegulerFileWriter(RegularFile);
         impl core::fmt::Write for RegulerFileWriter {
@@ -61,7 +67,18 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
         }
     }
 
-    writeln!(&mut system_table.stdout(), "Kernel did not execute").unwrap();
+    writeln!(&mut system_table.stdout(), "Call Kernel file").unwrap();
+
+    // カーネルファイルの呼び出し
+    let kernel_file_handle = root_dir.open("\\kernel.elf", FileMode::Read, FileAttribute::READ_ONLY).unwrap_success();
+    let mut kernel_file = match kernel_file_handle.into_type().unwrap_success() {
+        FileType::Regular(file) => file,
+        _ => panic!("kernel file is not regular file"),
+    };
+   
+    // 必要バッファ数の確認: required size = 102
+    let check_file_size = kernel_file.get_info::<FileInfo>(&mut []).expect_error("");
+    writeln!(&mut system_table.stdout(), "required size = {:?}", check_file_size).unwrap();
 
     loop {}
     //Status::SUCCESS
