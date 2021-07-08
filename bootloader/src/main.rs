@@ -4,7 +4,9 @@
 
 use core::panic::PanicInfo;
 use core::fmt::Write;
+use core::slice::from_raw_parts_mut;
 
+use elf_rs::*;
 use uefi::{
     prelude::*,
     proto::loaded_image::LoadedImage,
@@ -67,8 +69,6 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
         }
     }
 
-    writeln!(&mut system_table.stdout(), "Call Kernel file").unwrap();
-
     // カーネルファイルの呼び出し
     let kernel_file_handle = root_dir.open("\\kernel.elf", FileMode::Read, FileAttribute::READ_ONLY).unwrap_success();
     let mut kernel_file = match kernel_file_handle.into_type().unwrap_success() {
@@ -77,11 +77,82 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     };
    
     // 必要バッファ数の確認: required size = 102
-    let check_file_size = kernel_file.get_info::<FileInfo>(&mut []).expect_error("");
-    writeln!(&mut system_table.stdout(), "required size = {:?}", check_file_size).unwrap();
+    // let check_file_size = kernel_file.get_info::<FileInfo>(&mut []).expect_error("");
+    // writeln!(&mut system_table.stdout(), "required size = {:?}", check_file_size).unwrap();
+
+    // ファイルサイズの取得
+    const REQ_BUF: usize = 102;
+    let mut buf = [0u8; REQ_BUF];
+    let kernel_file_info: &mut FileInfo = kernel_file.get_info::<FileInfo>(&mut buf[..]).unwrap_success();
+    let file_size = kernel_file_info.file_size() as usize;
+
+    // メモリの確保
+    let kernel_tmp =  boot_services.allocate_pool(MemoryType::LOADER_DATA, file_size).unwrap_success();
+    let kernel_file_buffer: &mut [u8] = unsafe { from_raw_parts_mut(kernel_tmp, file_size) };
+    kernel_file.read(kernel_file_buffer).unwrap_success();
+    kernel_file.close();
+
+    // kernel sizeの取得
+    let elf = Elf::from_bytes(&kernel_file_buffer).unwrap();
+    let mut kernel_start = u64::max_value();
+    let mut kernel_end = u64::min_value();
+    if let Elf::Elf64(ref e) = elf {
+        for program_header in e.program_header_iter() {
+            let header = program_header.ph;
+            if matches!(header.ph_type(), ProgramType::LOAD) {
+                let vaddr = header.vaddr();
+                let len = header.memsz();
+                kernel_start = core::cmp::min(kernel_start, vaddr);
+                kernel_end = core::cmp::max(kernel_end, vaddr + len);
+            }
+        }
+    }
+
+    let load_len = kernel_end - kernel_start;
+
+    // カーネルファイルの読み込み
+    let n_pages = (load_len as usize + 0xfff) / 0x1000;
+    let page_addr = boot_services
+        .allocate_pages(
+            AllocateType::Address(kernel_start as usize),
+            MemoryType::LOADER_DATA,
+            n_pages
+        ).unwrap_success();
+
+    if let Elf::Elf64(ref e) = elf {
+        for program_header in e.program_header_iter() {
+            let header = program_header.ph;
+            if matches!(header.ph_type(), ProgramType::LOAD) {
+                let segment = program_header.segment();
+                let vaddr = header.vaddr();
+                let file_len = header.filesz();
+                let dst = unsafe { from_raw_parts_mut(vaddr as *mut u8, file_len as usize) };
+                for i in 0..file_len as usize {
+                    dst[i] = segment[i];
+                }
+            }
+        }
+    }
+
+    // エントリポイント用のアドレス
+    let ep_addr: *const u64 = (kernel_tmp as u64 + 24) as *const u64;
+    let entry_pointer = unsafe { *ep_addr } as *const ();
+    let entry_contents = entry_pointer as *const[u8; 16];
+    unsafe {
+        for x in &*entry_contents {
+            writeln!(&mut system_table.stdout(), "{:x}", x).unwrap();
+        }
+    }
+
+    // ブートサービスの停止
+    let (_runtime, _desc_itr) = system_table
+        .exit_boot_services(handle, &mut memory_map_buffer[..])
+        .unwrap_success();
+
+    // カーネルの起動(未完成)
+
 
     loop {}
-    //Status::SUCCESS
 }
 
 unsafe fn open_root_dir(boot_services: &BootServices, handle: Handle) -> uefi::Result<Directory> {
