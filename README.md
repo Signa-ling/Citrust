@@ -10,3 +10,17 @@
 - [Rust で UEFI のハローワールド](https://neriring.hatenablog.jp/entry/2020/05/17/133851)
 - [Rust-MikanOS](https://github.com/callus-corn/Rust-MikanOS)
 - [Mandarin OS](https://github.com/algon-320/mandarin)
+
+## build memo
+
+### bootloader
+
+```
+$ cargo +nightly build -Zbuild-std=core --target x86_64-unknown-uefi --release
+```
+
+### kernel
+
+```
+$ cargo +nightly build -Zbuild-std=core --target x86-64-CitrustOS.json --release
+```
