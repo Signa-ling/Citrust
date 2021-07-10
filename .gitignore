@@ -1,3 +1,5 @@
 target/
 mnt/
 disk.img
+citrust/
+kernel.elf
