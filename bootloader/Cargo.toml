@@ -9,3 +9,4 @@ edition = "2018"
 uefi = { git = "https://github.com/rust-osdev/uefi-rs.git" }
 rlibc = "1.0.0"
 elf_rs = { git = "https://github.com/vincenthouyi/elf_rs.git" }
+byteorder = { version = "1", default-features = false }

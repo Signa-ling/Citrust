@@ -6,9 +6,11 @@ use core::panic::PanicInfo;
 use core::fmt::Write;
 use core::slice::from_raw_parts_mut;
 
+use byteorder::{ByteOrder, LittleEndian};
 use elf_rs::*;
 use uefi::{
     prelude::*,
+    proto::console::gop::GraphicsOutput,
     proto::loaded_image::LoadedImage,
     proto::media::file::{File, RegularFile, Directory, FileInfo, FileMode, FileType, FileAttribute},
     proto::media::fs::SimpleFileSystem,
@@ -69,6 +71,13 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
         }
     }
 
+    // GOPの取得と画面描画の準備
+    let gop = boot_services.locate_protocol::<GraphicsOutput>().unwrap_success();
+    let gop = unsafe { &mut *gop.get() };
+    let mut fb = gop.frame_buffer();
+    let mut fb_addr = fb.as_mut_ptr();
+    let fb_size = fb.size();
+
     // カーネルファイルの呼び出し
     let kernel_file_handle = root_dir.open("\\kernel.elf", FileMode::Read, FileAttribute::READ_ONLY).unwrap_success();
     let mut kernel_file = match kernel_file_handle.into_type().unwrap_success() {
@@ -87,9 +96,9 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let file_size = kernel_file_info.file_size() as usize;
 
     // メモリの確保
-    let kernel_tmp =  boot_services.allocate_pool(MemoryType::LOADER_DATA, file_size).unwrap_success();
-    let kernel_file_buffer: &mut [u8] = unsafe { from_raw_parts_mut(kernel_tmp, file_size) };
-    kernel_file.read(kernel_file_buffer).unwrap_success();
+    let kernel_tmp = boot_services.allocate_pool(MemoryType::LOADER_DATA, file_size).unwrap_success();
+    let mut kernel_file_buffer = unsafe { from_raw_parts_mut(kernel_tmp as *mut u8, file_size) };
+    kernel_file.read(&mut kernel_file_buffer).unwrap_success();
     kernel_file.close();
 
     // kernel sizeの取得
@@ -112,6 +121,7 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     // カーネルファイルの読み込み
     let n_pages = (load_len as usize + 0xfff) / 0x1000;
+
     let page_addr = boot_services
         .allocate_pages(
             AllocateType::Address(kernel_start as usize),
@@ -135,22 +145,24 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     }
 
     // エントリポイント用のアドレス
-    let ep_addr: *const u64 = (kernel_tmp as u64 + 24) as *const u64;
-    let entry_pointer = unsafe { *ep_addr } as *const ();
-    let entry_contents = entry_pointer as *const[u8; 16];
-    unsafe {
-        for x in &*entry_contents {
-            writeln!(&mut system_table.stdout(), "{:x}", x).unwrap();
-        }
-    }
+    let ep_buf = unsafe { from_raw_parts_mut((kernel_tmp as u64 + 24) as *mut u8, 8) };
+    let kernel_main_addr = LittleEndian::read_u64(&ep_buf);
+    writeln!(&mut system_table.stdout(), "main addr = {:x}", kernel_main_addr).unwrap();
+    writeln!(&mut system_table.stdout(), "addr: {:?}, size: {:x}", fb_addr, fb_size).unwrap();
 
     // ブートサービスの停止
     let (_runtime, _desc_itr) = system_table
         .exit_boot_services(handle, &mut memory_map_buffer[..])
         .unwrap_success();
-
-    // カーネルの起動(未完成)
-
+        
+    unsafe {
+        let mut cnt = 0;
+        while cnt < fb_size {
+            *fb_addr = 255;
+            fb_addr = fb_addr.add(1);
+            cnt = cnt + 1;
+        }
+    }
 
     loop {}
 }
