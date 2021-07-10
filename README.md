@@ -13,14 +13,20 @@
 
 ## build memo
 
-### bootloader
+### bootloader build
 
 ```
-$ cargo +nightly build -Zbuild-std=core --target x86_64-unknown-uefi --release
+$ bash bootloader/build.sh
 ```
 
-### kernel
+### kernel build
 
 ```
-$ cargo +nightly build -Zbuild-std=core --target x86-64-CitrustOS.json --release
+$ bash kernel/build.sh
+```
+
+### run qemu
+
+```
+$ bash run_qemu.sh
 ```

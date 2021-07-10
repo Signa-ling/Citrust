@@ -154,15 +154,14 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let (_runtime, _desc_itr) = system_table
         .exit_boot_services(handle, &mut memory_map_buffer[..])
         .unwrap_success();
-        
-    unsafe {
-        let mut cnt = 0;
-        while cnt < fb_size {
-            *fb_addr = 255;
-            fb_addr = fb_addr.add(1);
-            cnt = cnt + 1;
-        }
-    }
+    
+    // kernelへの受け渡し
+    let kernel_entry = unsafe {
+        let f: extern "efiapi" fn(*mut u8, usize) -> ! = core::mem::transmute(kernel_main_addr);
+        f
+    };
+    
+    kernel_entry(fb_addr, fb_size);
 
     loop {}
 }
