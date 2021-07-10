@@ -4,19 +4,18 @@
 
 use core::panic::PanicInfo;
 
-static HELLO: &[u8] = b"Hello Citrust";
-
+// note: _start()じゃないと読み込んでくれない
 #[no_mangle]
-pub extern "efiapi" fn _start() -> ! {
-    let vga_buffer = 0xb8000 as *mut u8;
-
-    for (i, &byte) in HELLO.iter().enumerate() {
-        unsafe {
-            *vga_buffer.offset(i as isize * 2) = byte;
-            *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
+pub extern "efiapi" fn _start(mut fb_addr: *mut u8, fb_size: usize) -> ! {
+    // 画面の白塗り
+    unsafe {
+        let mut cnt = 0;
+        while cnt < fb_size {
+            *fb_addr = 255;
+            fb_addr = fb_addr.add(1);
+            cnt = cnt + 1;
         }
     }
-
     loop {}
 }
 
