@@ -2,8 +2,8 @@
 
 #[derive(Debug, Clone, Copy)]
 pub enum PixelFormat {
-    kPixelRGBResv8bitPerColor,
-    kPixelBGRResv8bitPerColor,
+    PixelRGBResv8bitPerColor,
+    PixelBGRResv8bitPerColor,
 }
 
 #[derive(Debug, Clone, Copy)]
