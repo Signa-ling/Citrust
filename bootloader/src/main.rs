@@ -6,6 +6,8 @@ use core::panic::PanicInfo;
 use core::fmt::Write;
 use core::slice::from_raw_parts_mut;
 
+use library::{PixelFormat, FrameBufferConfig};
+
 use byteorder::{ByteOrder, LittleEndian};
 use elf_rs::*;
 use uefi::{
