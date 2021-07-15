@@ -12,13 +12,13 @@ use library::{FrameBufferConfig};
 pub extern "efiapi" fn _start(config: FrameBufferConfig) -> ! {
     for x in 0..config.horizontal_resolution {
         for y in 0..config.vertical_resolution {
-            unsafe{ write_px(&config, x, y, PixelColor {r: 255, g: 255, b: 255 }) };
+            write_px(&config, x, y, PixelColor {r: 255, g: 255, b: 255 });
         }
     }
 
     for x in 0..200 {
         for y in 0..100 {
-            unsafe{ write_px(&config, 100 + x, 100 + y, PixelColor {r: 0, g: 255, b: 0 }) };
+            write_px(&config, 100 + x, 100 + y, PixelColor {r: 0, g: 255, b: 0 });
         }
     }
 
