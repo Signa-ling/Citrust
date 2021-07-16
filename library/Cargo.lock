@@ -3,12 +3,5 @@
 version = 3
 
 [[package]]
-name = "kernel"
-version = "0.1.0"
-dependencies = [
- "library",
-]
-
-[[package]]
 name = "library"
 version = "0.1.0"

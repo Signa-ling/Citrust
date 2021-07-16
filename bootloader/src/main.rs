@@ -6,11 +6,13 @@ use core::panic::PanicInfo;
 use core::fmt::Write;
 use core::slice::from_raw_parts_mut;
 
+use library::{PixelFormat as PF, FrameBufferConfig};
+
 use byteorder::{ByteOrder, LittleEndian};
 use elf_rs::*;
 use uefi::{
     prelude::*,
-    proto::console::gop::GraphicsOutput,
+    proto::console::gop::{GraphicsOutput, PixelFormat},
     proto::loaded_image::LoadedImage,
     proto::media::file::{File, RegularFile, Directory, FileInfo, FileMode, FileType, FileAttribute},
     proto::media::fs::SimpleFileSystem,
@@ -75,8 +77,25 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let gop = boot_services.locate_protocol::<GraphicsOutput>().unwrap_success();
     let gop = unsafe { &mut *gop.get() };
     let mut fb = gop.frame_buffer();
-    let mut fb_addr = fb.as_mut_ptr();
+    let fb_addr = fb.as_mut_ptr();
     let fb_size = fb.size();
+    let info = gop.current_mode_info();
+    let (horizontal, vertical) = info.resolution();
+    let pixels_per_scan_line = info.stride();
+    let pixel_format = match info.pixel_format() {
+        PixelFormat::Rgb => PF::PixelRGBResv8bitPerColor,
+        PixelFormat::Bgr => PF::PixelBGRResv8bitPerColor,
+        _ => panic!(),
+    };
+
+    let frame_buffer_config = FrameBufferConfig {
+        frame_buffer: fb_addr,
+        size: fb_size,
+        pixels_per_scan_line: pixels_per_scan_line as u32,
+        horizontal_resolution: horizontal as u32,
+        vertical_resolution: vertical as u32,
+        pixel_format: pixel_format,
+    };
 
     // カーネルファイルの呼び出し
     let kernel_file_handle = root_dir.open("\\kernel.elf", FileMode::Read, FileAttribute::READ_ONLY).unwrap_success();
@@ -122,12 +141,11 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     // カーネルファイルの読み込み
     let n_pages = (load_len as usize + 0xfff) / 0x1000;
 
-    let page_addr = boot_services
-        .allocate_pages(
-            AllocateType::Address(kernel_start as usize),
-            MemoryType::LOADER_DATA,
-            n_pages
-        ).unwrap_success();
+    boot_services.allocate_pages(
+        AllocateType::Address(kernel_start as usize),
+        MemoryType::LOADER_DATA,
+        n_pages
+    ).unwrap_success();
 
     if let Elf::Elf64(ref e) = elf {
         for program_header in e.program_header_iter() {
@@ -157,13 +175,11 @@ fn efi_main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     
     // kernelへの受け渡し
     let kernel_entry = unsafe {
-        let f: extern "efiapi" fn(*mut u8, usize) -> ! = core::mem::transmute(kernel_main_addr);
+        let f: extern "efiapi" fn(FrameBufferConfig) -> ! = core::mem::transmute(kernel_main_addr);
         f
     };
     
-    kernel_entry(fb_addr, fb_size);
-
-    loop {}
+    kernel_entry(frame_buffer_config);
 }
 
 unsafe fn open_root_dir(boot_services: &BootServices, handle: Handle) -> uefi::Result<Directory> {

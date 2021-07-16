@@ -4,18 +4,24 @@
 
 use core::panic::PanicInfo;
 
+use kernel::graphics::{PixelColor, write_px};
+use library::{FrameBufferConfig};
+
 // note: _start()じゃないと読み込んでくれない
 #[no_mangle]
-pub extern "efiapi" fn _start(mut fb_addr: *mut u8, fb_size: usize) -> ! {
-    // 画面の白塗り
-    unsafe {
-        let mut cnt = 0;
-        while cnt < fb_size {
-            *fb_addr = 255;
-            fb_addr = fb_addr.add(1);
-            cnt = cnt + 1;
+pub extern "efiapi" fn _start(config: FrameBufferConfig) -> ! {
+    for x in 0..config.horizontal_resolution {
+        for y in 0..config.vertical_resolution {
+            write_px(&config, x, y, PixelColor {r: 255, g: 255, b: 255 });
         }
     }
+
+    for x in 0..200 {
+        for y in 0..100 {
+            write_px(&config, 100 + x, 100 + y, PixelColor {r: 0, g: 255, b: 0 });
+        }
+    }
+
     loop {}
 }
 

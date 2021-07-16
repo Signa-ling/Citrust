@@ -16,13 +16,13 @@
 ### bootloader build
 
 ```
-$ bash bootloader/build.sh
+$ bash build.sh
 ```
 
 ### kernel build
 
 ```
-$ bash kernel/build.sh
+$ bash build.sh
 ```
 
 ### run qemu
