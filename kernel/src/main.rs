@@ -23,6 +23,9 @@ pub extern "efiapi" fn _start(config: FrameBufferConfig) -> ! {
         }
     }
 
+    grahpics_struct.write_ascii(50, 50, 'A', PixelColor(0, 0, 0));
+    grahpics_struct.write_ascii(50, 50, 'A', PixelColor(0, 0, 0));
+
     loop {}
 }
 
